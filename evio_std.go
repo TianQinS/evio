@@ -35,12 +35,13 @@ type stdudpconn struct {
 	in         []byte
 }
 
-func (c *stdudpconn) Context() interface{}       { return nil }
-func (c *stdudpconn) SetContext(ctx interface{}) {}
-func (c *stdudpconn) AddrIndex() int             { return c.addrIndex }
-func (c *stdudpconn) LocalAddr() net.Addr        { return c.localAddr }
-func (c *stdudpconn) RemoteAddr() net.Addr       { return c.remoteAddr }
-func (c *stdudpconn) Wake()                      {}
+func (c *stdudpconn) Context() interface{}              { return nil }
+func (c *stdudpconn) SetContext(ctx interface{})        {}
+func (c *stdudpconn) AddrIndex() int                    { return c.addrIndex }
+func (c *stdudpconn) LocalAddr() net.Addr               { return c.localAddr }
+func (c *stdudpconn) RemoteAddr() net.Addr              { return c.remoteAddr }
+func (c *stdudpconn) Wake()                             {}
+func (c *stdudpconn) Write(p []byte) (n int, err error) { return 0, nil }
 
 type stdloop struct {
 	idx   int               // loop index
@@ -64,12 +65,13 @@ type wakeReq struct {
 	c *stdconn
 }
 
-func (c *stdconn) Context() interface{}       { return c.ctx }
-func (c *stdconn) SetContext(ctx interface{}) { c.ctx = ctx }
-func (c *stdconn) AddrIndex() int             { return c.addrIndex }
-func (c *stdconn) LocalAddr() net.Addr        { return c.localAddr }
-func (c *stdconn) RemoteAddr() net.Addr       { return c.remoteAddr }
-func (c *stdconn) Wake()                      { c.loop.ch <- wakeReq{c} }
+func (c *stdconn) Context() interface{}              { return c.ctx }
+func (c *stdconn) SetContext(ctx interface{})        { c.ctx = ctx }
+func (c *stdconn) AddrIndex() int                    { return c.addrIndex }
+func (c *stdconn) LocalAddr() net.Addr               { return c.localAddr }
+func (c *stdconn) RemoteAddr() net.Addr              { return c.remoteAddr }
+func (c *stdconn) Wake()                             { c.loop.ch <- wakeReq{c} }
+func (c *stdconn) Write(p []byte) (n int, err error) { return c.conn.Write(p) }
 
 type stdin struct {
 	c  *stdconn
