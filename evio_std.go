@@ -12,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/gobwas/ws/wsutil"
 )
 
 var errClosing = errors.New("closing")
@@ -205,19 +207,23 @@ func stdlistenerRun(s *stdserver, ln *listener, lnidx int) {
 				ferr = err
 				return
 			}
+			// websocket hankshake.
+			if Handshake(conn) != nil {
+				conn.Close()
+				return
+			}
 			l := s.loops[int(atomic.AddUintptr(&s.accepted, 1))%len(s.loops)]
 			c := &stdconn{conn: conn, loop: l, lnidx: lnidx}
 			l.ch <- c
 			go func(c *stdconn) {
-				var packet [0xFFFF]byte
 				for {
-					n, err := c.conn.Read(packet[:])
+					payload, err := wsutil.ReadClientText(c.conn)
 					if err != nil {
 						c.conn.SetReadDeadline(time.Time{})
 						l.ch <- &stderr{c, err}
 						return
 					}
-					l.ch <- &stdin{c, append([]byte{}, packet[:n]...)}
+					l.ch <- &stdin{c, payload}
 				}
 			}(c)
 		}

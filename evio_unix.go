@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gobwas/ws/wsutil"
 	reuseport "github.com/kavu/go_reuseport"
 	"github.com/tidwall/evio/internal"
 )
@@ -44,6 +45,23 @@ func (c *conn) Wake() {
 	if c.loop != nil {
 		c.loop.poll.Trigger(c)
 	}
+}
+
+func (c *conn) Read(p []byte) (n int, err error) {
+	n, err = syscall.Read(c.fd, p)
+	return
+}
+
+func (c *conn) Write(p []byte) (n int, err error) {
+	n = len(p)
+	for len(p) > 0 {
+		nn, err := syscall.Write(c.fd, p)
+		if err != nil {
+			return n, err
+		}
+		p = p[nn:]
+	}
+	return n, nil
 }
 
 type server struct {
@@ -421,16 +439,12 @@ func loopWake(s *server, l *loop, c *conn) error {
 
 func loopRead(s *server, l *loop, c *conn) error {
 	var in []byte
-	n, err := syscall.Read(c.fd, l.packet)
-	if n == 0 || err != nil {
+	in, err := wsutil.ReadClientText(c.conn)
+	if err != nil {
 		if err == syscall.EAGAIN {
 			return nil
 		}
 		return loopCloseConn(s, l, c, err)
-	}
-	in = l.packet[:n]
-	if !c.reuse {
-		in = append([]byte{}, in...)
 	}
 	if s.events.Data != nil {
 		out, action := s.events.Data(c, in)
