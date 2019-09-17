@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 	reuseport "github.com/kavu/go_reuseport"
 	"github.com/tidwall/evio/internal"
@@ -34,6 +35,7 @@ type conn struct {
 	localAddr  net.Addr         // local addre
 	remoteAddr net.Addr         // remote addr
 	loop       *loop            // connected loop
+	reader     wsutil.Reader
 }
 
 func (c *conn) Context() interface{}       { return c.ctx }
@@ -309,6 +311,13 @@ func loopAccept(s *server, l *loop, fd int) error {
 				return err
 			}
 			c := &conn{fd: nfd, sa: sa, lnidx: i, loop: l}
+			c.reader = wsutil.Reader{
+				Source:          c,
+				State:           ws.StateServerSide,
+				CheckUTF8:       true,
+				SkipHeaderCheck: false,
+				OnIntermediate:  wsutil.ControlFrameHandler(c, ws.StateServerSide),
+			}
 			l.fdconns[c.fd] = c
 			l.poll.AddReadWrite(c.fd)
 			atomic.AddInt32(&l.count, 1)
@@ -438,8 +447,7 @@ func loopWake(s *server, l *loop, c *conn) error {
 }
 
 func loopRead(s *server, l *loop, c *conn) error {
-	var in []byte
-	in, err := wsutil.ReadClientText(c.conn)
+	in, err := wsRead(&c.reader)
 	if err != nil {
 		if err == syscall.EAGAIN {
 			return nil

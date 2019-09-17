@@ -7,12 +7,14 @@ package evio
 import (
 	"errors"
 	"io"
+	"io/ioutil"
 	"net"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 )
 
@@ -55,7 +57,8 @@ type stdconn struct {
 	addrIndex  int
 	localAddr  net.Addr
 	remoteAddr net.Addr
-	conn       net.Conn    // original connection
+	conn       net.Conn // original connection
+	reader     wsutil.Reader
 	ctx        interface{} // user-defined context
 	loop       *stdloop    // owner loop
 	lnidx      int         // index of listener
@@ -178,6 +181,29 @@ func stdserve(events Events, listeners []*listener) error {
 	return ferr
 }
 
+func wsRead(rd *wsutil.Reader) ([]byte, error) {
+	for {
+		hdr, err := rd.NextFrame()
+		if err != nil {
+			return nil, err
+		}
+		if hdr.OpCode.IsControl() {
+			if err := rd.OnIntermediate(hdr, rd); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if hdr.OpCode&ws.OpText == 0 {
+			if err := rd.Discard(); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		bts, err := ioutil.ReadAll(rd)
+		return bts, err
+	}
+}
+
 func stdlistenerRun(s *stdserver, ln *listener, lnidx int) {
 	var ferr error
 	defer func() {
@@ -213,11 +239,19 @@ func stdlistenerRun(s *stdserver, ln *listener, lnidx int) {
 				return
 			}
 			l := s.loops[int(atomic.AddUintptr(&s.accepted, 1))%len(s.loops)]
-			c := &stdconn{conn: conn, loop: l, lnidx: lnidx}
+			c := &stdconn{conn: conn, loop: l, lnidx: lnidx, reader: wsutil.Reader{
+				Source:          conn,
+				State:           ws.StateServerSide,
+				CheckUTF8:       true,
+				SkipHeaderCheck: false,
+				OnIntermediate:  wsutil.ControlFrameHandler(conn, ws.StateServerSide),
+			}}
 			l.ch <- c
 			go func(c *stdconn) {
 				for {
-					payload, err := wsutil.ReadClientText(c.conn)
+					// payload, err := wsutil.ReadClientText(c.conn)
+					payload, err := wsRead(&c.reader)
+					// fmt.Println(payload, err)
 					if err != nil {
 						c.conn.SetReadDeadline(time.Time{})
 						l.ch <- &stderr{c, err}
