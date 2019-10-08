@@ -236,7 +236,7 @@ func stdlistenerRun(s *stdserver, ln *listener, lnidx int) {
 			// websocket hankshake.
 			if Handshake(conn) != nil {
 				conn.Close()
-				return
+				continue
 			}
 			l := s.loops[int(atomic.AddUintptr(&s.accepted, 1))%len(s.loops)]
 			c := &stdconn{conn: conn, loop: l, lnidx: lnidx, reader: wsutil.Reader{

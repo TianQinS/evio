@@ -16,10 +16,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/TianQinS/evio/internal"
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 	reuseport "github.com/kavu/go_reuseport"
-	"github.com/tidwall/evio/internal"
 )
 
 type conn struct {
@@ -311,6 +311,10 @@ func loopAccept(s *server, l *loop, fd int) error {
 				return err
 			}
 			c := &conn{fd: nfd, sa: sa, lnidx: i, loop: l}
+			if Handshake(c) != nil {
+				syscall.Close(c.fd)
+				continue
+			}
 			c.reader = wsutil.Reader{
 				Source:          c,
 				State:           ws.StateServerSide,
