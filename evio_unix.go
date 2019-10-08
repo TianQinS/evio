@@ -16,10 +16,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/TianQinS/evio/internal"
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 	reuseport "github.com/kavu/go_reuseport"
-	"github.com/tidwall/evio/internal"
 )
 
 type conn struct {
