@@ -70,13 +70,23 @@ type wakeReq struct {
 	c *stdconn
 }
 
-func (c *stdconn) Context() interface{}              { return c.ctx }
-func (c *stdconn) SetContext(ctx interface{})        { c.ctx = ctx }
-func (c *stdconn) AddrIndex() int                    { return c.addrIndex }
-func (c *stdconn) LocalAddr() net.Addr               { return c.localAddr }
-func (c *stdconn) RemoteAddr() net.Addr              { return c.remoteAddr }
-func (c *stdconn) Wake()                             { c.loop.ch <- wakeReq{c} }
-func (c *stdconn) Write(p []byte) (n int, err error) { return c.conn.Write(p) }
+func (c *stdconn) Context() interface{}       { return c.ctx }
+func (c *stdconn) SetContext(ctx interface{}) { c.ctx = ctx }
+func (c *stdconn) AddrIndex() int             { return c.addrIndex }
+func (c *stdconn) LocalAddr() net.Addr        { return c.localAddr }
+func (c *stdconn) RemoteAddr() net.Addr       { return c.remoteAddr }
+func (c *stdconn) Wake()                      { c.loop.ch <- wakeReq{c} }
+func (c *stdconn) Write(p []byte) (n int, err error) {
+	hasRead, n := 0, 0
+	for n < len(p) {
+		n, err = c.conn.Write(p[hasRead:])
+		if err != nil {
+			break
+		}
+		hasRead += n
+	}
+	return hasRead, err
+}
 
 type stdin struct {
 	c  *stdconn
